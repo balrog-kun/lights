@@ -175,9 +175,23 @@ static void nrf24_rx_mode(void) {
 	nrf24_in_rx = 1;
 }
 
-static void nrf24_idle_mode(void) {
-	if (nrf24_in_rx)
+/*
+ * This switches out of Rx mode and leaves the chip in Standby if desired.
+ * Otherwise the chip is powered off.  In Standby a new operation will
+ * start faster but more current is consumed while waiting.
+ */
+static void nrf24_idle_mode(uint8_t standby) {
+	if (nrf24_in_rx) {
 		nrf24_ce(0);
+
+		if (!standby)
+			nrf24_write_reg(CONFIG, CONFIG_VAL);
+	} else {
+		if (standby)
+			nrf24_write_reg(CONFIG, CONFIG_VAL | (1 << PWR_UP));
+		else
+			nrf24_write_reg(CONFIG, CONFIG_VAL);
+	}
 
 	nrf24_in_rx = 0;
 }
@@ -226,7 +240,7 @@ static void nrf24_tx(uint8_t *buf, uint8_t len) {
 	 * in Rx which we'll switch back on when this Tx is done.
 	 */
 	if (nrf24_in_rx) {
-		nrf24_idle_mode();
+		nrf24_idle_mode(1);
 
 		nrf24_in_rx = 1;
 	}
