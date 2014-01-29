@@ -1,0 +1,12 @@
+My code for a simple home automation setup based on cheap Arduino
+Pro Mini clones, relays and nRF24L01+ modules.  It will also work
+as a simple wireless sensor network and perhaps collect statistics
+about the use of each light.
+
+http://wiki.makespacemadrid.org/index.php?title=ArduinoMicroWSN
+
+There is little actual automation here, it replicates the original
+setup with working wall switches.  Each wall switch is connected to
+digital ground and an Arduino GPIO through a long cable.  Lights are
+connected to the mains through a relay driven by another Arduino
+GPIO.
