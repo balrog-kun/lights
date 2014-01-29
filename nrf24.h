@@ -162,14 +162,24 @@ static void nrf24_set_tx_addr(uint8_t addr[3]) {
 	nrf24_write_addr_reg(RX_ADDR_P0, addr);
 }
 
+static uint8_t nrf24_in_rx = 0;
+
 static void nrf24_rx_mode(void) {
+	if (nrf24_in_rx)
+		return;
+
 	/* Rx mode */
 	nrf24_write_reg(CONFIG, CONFIG_VAL | (1 << PWR_UP) | (1 << PRIM_RX));
 	nrf24_ce(1);
+
+	nrf24_in_rx = 1;
 }
 
 static void nrf24_idle_mode(void) {
-	nrf24_ce(0);
+	if (nrf24_in_rx)
+		nrf24_ce(0);
+
+	nrf24_in_rx = 0;
 }
 
 static uint8_t nrf24_rx_new_data(void) {
@@ -210,13 +220,31 @@ static void nrf24_rx_read(uint8_t *buf, uint8_t *pkt_len) {
 }
 
 static void nrf24_tx(uint8_t *buf, uint8_t len) {
+	/*
+	 * The user may have put the chip out of Rx mode to perform a
+	 * few Tx operations in a row, or they may have left the chip
+	 * in Rx which we'll switch back on when this Tx is done.
+	 */
+	if (nrf24_in_rx) {
+		nrf24_idle_mode();
+
+		nrf24_in_rx = 1;
+	}
+
 	/* Tx mode */
 	nrf24_write_reg(CONFIG, CONFIG_VAL | (1 << PWR_UP));
 
 	/*
 	 * The TX_FULL bit is automatically reset on a successful Tx, but
 	 * the FIFO is apparently not actually cleaned so bad things happen
-	 * if we don't flush it manually.
+	 * if we don't flush it manually even though the datasheet says
+	 * a W_TX_PAYLOAD resets the FIFO contents same as a FLUSH_TX.
+	 * This may be connected with the fact of using automatic ACKing.
+	 * But if don't we flush the FIFO here it looks like each payload
+	 * gets retransmitted about 3 times (sometimes 2, sometimes 4)
+	 * instead of the chip picking up what we've written.  After that
+	 * it picks up whatever the new payload is and again stops accepting
+	 * new payloads for another while.
 	 */
 	nrf24_tx_flush();
 
@@ -248,6 +276,12 @@ static int nrf24_tx_result_wait(void) {
 
 	/* Reset status bits */
 	nrf24_write_reg(STATUS, (1 << MAX_RT) | (1 << TX_DS));
+
+	if (nrf24_in_rx) {
+		nrf24_in_rx = 0;
+
+		nrf24_rx_mode();
+	}
 
 	return (status & (1 << TX_FULL)) ? -1 : 0;
 }

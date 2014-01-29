@@ -21,13 +21,9 @@
 #include "nrf24.h"
 
 static void handle_input(char ch) {
-	nrf24_idle_mode();
-
 	nrf24_tx((uint8_t *) &ch, 1);
 	sei(); /* TODO: be careful with new serial interrupts */
 	nrf24_tx_result_wait();
-
-	nrf24_rx_mode();
 }
 
 static uint8_t eeprom_read(uint16_t addr) {
