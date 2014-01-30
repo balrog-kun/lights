@@ -6,6 +6,7 @@
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <string.h>
 
 #include "timer1.h"
 #include "uart.h"
@@ -20,11 +21,20 @@
 #include "spi.h"
 #include "nrf24.h"
 
+#define FIFO_MASK	63
+static struct ring_buffer_s {
+	uint8_t data[FIFO_MASK + 1];
+	uint8_t start, len;
+} tx_fifo;
+
 static void handle_input(char ch) {
-	nrf24_tx((uint8_t *) &ch, 1);
-	sei(); /* TODO: be careful with new serial interrupts */
-	nrf24_tx_result_wait();
+	tx_fifo.data[(tx_fifo.start + tx_fifo.len ++) & FIFO_MASK] = ch;
 }
+
+#define min(a, b) \
+	({ __typeof__ (a) _a = (a); \
+		__typeof__ (b) _b = (b); \
+		_a < _b ? _a : _b; })
 
 static uint8_t eeprom_read(uint16_t addr) {
 	while (EECR & (1 << EEPE));
@@ -73,17 +83,42 @@ void setup(void) {
 }
 
 void loop(void) {
-	cli(); /* Be careful with serial interrupts, don't want to a Tx now */
+	/*
+	 * Note: all nrf24 calls are serialised in this function so as
+	 * to avoid any concurrency issues.
+	 */
+
 	if (nrf24_rx_fifo_data()) {
 		uint8_t pkt_len, pkt_buf[33];
 
 		nrf24_rx_read(pkt_buf, &pkt_len);
-		sei();
 
 		pkt_buf[pkt_len] = '\0';
 		serial_write_str((char *) pkt_buf);
-	} else
+	}
+
+	if (tx_fifo.len) { /* .len access should be atomic */
+		uint8_t pkt_len, pkt_buf[32], split;
+
+		cli();
+		pkt_len = min(tx_fifo.len, 32);
+		split = min(pkt_len, (~tx_fifo.start & FIFO_MASK) + 1);
+
+		memcpy(pkt_buf, tx_fifo.data +
+				(tx_fifo.start & FIFO_MASK), split);
+		memcpy(pkt_buf + split, tx_fifo.data, pkt_len - split);
+		/*
+		 * Or we could just do pkt_buf = tx_fifo.data + ...;
+		 * pkt_len = split;
+		 */
+
+		tx_fifo.len -= pkt_len;
+		tx_fifo.start += pkt_len;
 		sei();
+
+		nrf24_tx(pkt_buf, pkt_len);
+		nrf24_tx_result_wait();
+	}
 }
 
 int main(void) {
