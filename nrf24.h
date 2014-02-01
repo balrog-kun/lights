@@ -114,7 +114,7 @@ static void nrf24_delay(void) {
 			"\tnop\n"
 			"\tnop\n"
 			"\tnop\n"
-			"\tnop\n"
+			"\twdr\n"
 		);
 #endif
 	my_delay(5);
