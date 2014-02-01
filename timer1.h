@@ -11,3 +11,5 @@ void set_timeout(uint32_t when, void (*callback)(void));
 
 #define likely(x)	__builtin_expect((x), 1)
 #define unlikely(x)	__builtin_expect((x), 0)
+
+#define TIMER

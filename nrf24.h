@@ -13,8 +13,6 @@ static inline void nrf24_csn(uint8_t level) {
 }
 
 static inline void nrf24_ce(uint8_t level) {
-	static uint32_t prev_ce_edge;
-
 	/*
 	 * Make sure the minimum time period has passed since the previous
 	 * CE edge for the new edge to be detected.  The spec doesn't say
@@ -30,17 +28,38 @@ static inline void nrf24_ce(uint8_t level) {
 	 * Tx (or Rx) to Standby-I and then immediately go to Rx (or Tx)
 	 * the low CE period could be too short.
 	 */
+#ifdef TIMER
+	static uint32_t prev_ce_edge;
+
 	if (level)
 		while (timer_read() - prev_ce_edge <= F_CPU / 100000);
 	else
 		while (timer_read() - prev_ce_edge <= F_CPU / 5000);
+#else
+	/* This should take at least 10us (rising) or 200us (falling) */
+	uint16_t cnt = F_CPU / (level ? 100000 : 5000) / 8;
+
+	while (cnt --)
+		__asm__ __volatile__ (
+			"\tnop\n"
+			"\tnop\n"
+			"\tnop\n"
+			"\tnop\n"
+			"\tnop\n"
+			"\tnop\n"
+			"\tnop\n"
+			"\twdr\n"
+		);
+#endif
 
 	if (level)
 		CE_PORT |= CE_PIN;
 	else
 		CE_PORT &= ~CE_PIN;
 
+#ifdef TIMER
 	prev_ce_edge = timer_read();
+#endif
 }
 
 static uint8_t nrf24_read_reg(uint8_t addr) {
@@ -101,7 +120,9 @@ static uint8_t nrf24_tx_flush(void) {
 }
 
 static void nrf24_delay(void) {
-#if 0
+#ifdef TIMER
+	my_delay(5);
+#else
 	/* This should take at least 4ms */
 	uint16_t cnt = F_CPU / 250 / 8;
 
@@ -117,7 +138,6 @@ static void nrf24_delay(void) {
 			"\twdr\n"
 		);
 #endif
-	my_delay(5);
 }
 
 /* Enable 16-bit CRC */
