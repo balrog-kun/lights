@@ -3,6 +3,7 @@
 PORT = /dev/ttyUSB0
 TARGET = lights
 TARGET = passthrough
+TARGET = flasher
 SRC = $(TARGET).c uart.c timer1.c
 ASRC =
 MCU = atmega328p

@@ -91,6 +91,10 @@ void loop(void) {
 	if (nrf24_rx_fifo_data()) {
 		uint8_t pkt_len, pkt_buf[33];
 
+#ifdef FLASH_TOOL_MODE
+		flasher_rx_handle();
+#endif
+
 		nrf24_rx_read(pkt_buf, &pkt_len);
 
 		pkt_buf[pkt_len] = '\0';
@@ -99,6 +103,10 @@ void loop(void) {
 
 	if (tx_fifo.len) { /* .len access should be atomic */
 		uint8_t pkt_len, pkt_buf[32], split;
+
+#ifdef FLASH_TOOL_MODE
+		flasher_tx_handle();
+#endif
 
 		cli();
 		pkt_len = min(tx_fifo.len, 32);
@@ -123,6 +131,10 @@ void loop(void) {
 
 int main(void) {
 	setup();
+
+#ifdef FLASH_TOOL_MODE
+	flasher_setup();
+#endif
 
 	for (;;)
 		loop();
