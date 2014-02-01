@@ -124,7 +124,7 @@ static void nrf24_delay(void) {
 #define CONFIG_VAL ((1 << MASK_RX_DR) | (1 << MASK_TX_DS) | \
 		(1 << MASK_MAX_RT) | (1 << CRCO) | (1 << EN_CRC))
 
-static void nrf24_init(void) {
+static int nrf24_init(void) {
 	/* CE and CSN are outputs */
 	CE_DDR |= CE_PIN;
 	CSN_DDR |= CSN_PIN;
@@ -135,6 +135,9 @@ static void nrf24_init(void) {
 
 	/* 1500uS timeouts */
 	nrf24_write_reg(SETUP_RETR, 0x4f);
+	if (nrf24_read_reg(SETUP_RETR) != 0x4f)
+		return 1; /* There may be no nRF24 connected */
+
 	/* Maximum Tx power, 1Mbps data rate */
 	nrf24_write_reg(RF_SETUP, (1 << RF_PWR_LOW) | (1 << RF_PWR_HIGH));
 	/* Dynamic payload length for TX & RX (pipes 0 and 1) */
@@ -150,6 +153,8 @@ static void nrf24_init(void) {
 	nrf24_write_reg(EN_RXADDR, 0x02);
 	/* Enable ACKing on both pipe 0 & 1 for TX & RX ACK support */
 	nrf24_write_reg(EN_AA, 0x03);
+
+	return 0;
 }
 
 static void nrf24_set_rx_addr(uint8_t addr[3]) {
