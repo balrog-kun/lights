@@ -21,7 +21,7 @@
 #include "spi.h"
 #include "nrf24.h"
 
-#define FIFO_MASK	511
+#define FIFO_MASK	255
 static struct ring_buffer_s {
 	uint8_t data[FIFO_MASK + 1];
 	uint8_t start, len;
