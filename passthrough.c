@@ -89,7 +89,7 @@ void loop(void) {
 	 */
 
 	if (nrf24_rx_fifo_data()) {
-		uint8_t pkt_len, pkt_buf[33];
+		uint8_t pkt_len, pkt_buf[32], i;
 
 #ifdef FLASH_TOOL_MODE
 		flasher_rx_handle();
@@ -97,8 +97,8 @@ void loop(void) {
 
 		nrf24_rx_read(pkt_buf, &pkt_len);
 
-		pkt_buf[pkt_len] = '\0';
-		serial_write_str((char *) pkt_buf);
+		for (i = 0; i < pkt_len; i ++)
+			serial_write1(pkt_buf[i]);
 	}
 
 	if (tx_fifo.len) { /* .len access should be atomic */
