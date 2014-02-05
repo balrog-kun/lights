@@ -14,10 +14,12 @@
 #endif
 
 void serial_init(void) {
-	uint16_t baud = 8; /* 115200 at 16 MHz, TODO: use F_CPU */
+#define BAUD_RATE 115200
+	uint16_t baud = (F_CPU + BAUD_RATE * 4L) / (BAUD_RATE * 8L) - 1;
 
 	UBRR0H = baud >> 8;
 	UBRR0L = baud & 255;
+	UCSR0A = 0x02; /*(1 << U2X0);*/
 	UCSR0B = 0x98; /*(1 << RXEN0) | (1 << TXEN0) | (1 << RXCIE0);*/
 	UCSR0C = 0x06; /*(3 << UCSZ00);*/
 }
