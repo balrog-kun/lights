@@ -59,5 +59,5 @@ static void flasher_tx_handle(void) {
 	prev_txrx_ts = timer_read();
 
 	/* Don't flood the remote bootloader with our comms */
-	my_delay(1);
+	my_delay(4);
 }
