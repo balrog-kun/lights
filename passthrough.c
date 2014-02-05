@@ -110,7 +110,9 @@ void loop(void) {
 
 		cli();
 		pkt_len = min(tx_fifo.len, 32);
-		split = min(pkt_len, (~tx_fifo.start & FIFO_MASK) + 1);
+		sei();
+		split = min(pkt_len,
+				(uint16_t) (~tx_fifo.start & FIFO_MASK) + 1);
 
 		memcpy(pkt_buf, tx_fifo.data +
 				(tx_fifo.start & FIFO_MASK), split);
@@ -120,6 +122,7 @@ void loop(void) {
 		 * pkt_len = split;
 		 */
 
+		cli();
 		tx_fifo.len -= pkt_len;
 		tx_fifo.start += pkt_len;
 		sei();
