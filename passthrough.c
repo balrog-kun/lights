@@ -83,6 +83,8 @@ void setup(void) {
 }
 
 void loop(void) {
+	static uint8_t tx_cnt; /* Consecutive Tx packets counter */
+
 	/*
 	 * Note: all nrf24 calls are serialised in this function so as
 	 * to avoid any concurrency issues.
@@ -108,9 +110,18 @@ void loop(void) {
 		flasher_tx_handle();
 #endif
 
+		tx_cnt ++;
+
 		cli();
 		pkt_len = min(tx_fifo.len, 32);
 		sei();
+
+		/* HACK */
+		if (tx_cnt == 2 && pkt_len == 32)
+			pkt_len = 30;
+		else if (tx_cnt == 3)
+			pkt_len = 1;
+
 		split = min(pkt_len,
 				(uint16_t) (~tx_fifo.start & FIFO_MASK) + 1);
 
