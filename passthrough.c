@@ -21,6 +21,10 @@
 #include "spi.h"
 #include "nrf24.h"
 
+#ifndef MAX_PKT_SIZE
+# define MAX_PKT_SIZE	32
+#endif
+
 #define FIFO_MASK	255
 static struct ring_buffer_s {
 	uint8_t data[FIFO_MASK + 1];
@@ -101,6 +105,9 @@ void loop(void) {
 
 		for (i = 0; i < pkt_len; i ++)
 			serial_write1(pkt_buf[i]);
+#endif
+
+		tx_cnt = 0;
 	}
 
 	if (tx_fifo.len) { /* .len access should be atomic */
@@ -113,13 +120,13 @@ void loop(void) {
 		tx_cnt ++;
 
 		cli();
-		pkt_len = min(tx_fifo.len, 32);
+		pkt_len = min(tx_fifo.len, MAX_PLD_SIZE);
 		sei();
 
 		/* HACK */
-		if (tx_cnt == 2 && pkt_len == 32)
-			pkt_len = 30;
-		else if (tx_cnt == 3)
+		if (tx_cnt == 2 && MAX_PLD_SIZE > 2 && pkt_len == MAX_PLD_SIZE)
+			pkt_len = MAX_PLD_SIZE - 2;
+		else if (MAX_PLD_SIZE > 2 && tx_cnt == 3)
 			pkt_len = 1;
 
 		split = min(pkt_len,

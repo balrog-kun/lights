@@ -1,4 +1,5 @@
 #define FLASH_TOOL_MODE
+#define MAX_PKT_SIZE 32
 
 static void flasher_setup(void);
 static void flasher_rx_handle(void);
@@ -32,7 +33,7 @@ static void flasher_tx_handle(void) {
 	 * our radio address to return the ACK packets to.
 	 */
 	if (first_tx) {
-		uint8_t ch, addr[3];
+		uint8_t ch, pkt[4];
 
 		/*
 		 * Our protocol requires any program running on the board
@@ -45,12 +46,13 @@ static void flasher_tx_handle(void) {
 		/* Give the board time to reboot and enter the bootloader */
 		my_delay(100);
 
-		/* Finally send our address as a separate packet */
-		addr[0] = eeprom_read(0);
-		addr[1] = eeprom_read(1);
-		addr[2] = eeprom_read(2);
+		/* Finally send our address + pkt size as a separate packet */
+		pkt[0] = eeprom_read(0);
+		pkt[1] = eeprom_read(1);
+		pkt[2] = eeprom_read(2);
+		pkt[3] = MAX_PKT_SIZE;
 		/* TODO: set the no-ACK bit, the remote board can't ACK yet */
-		nrf24_tx(addr, 3);
+		nrf24_tx(pkt, 4);
 		nrf24_tx_result_wait();
 
 		first_tx = 0;
