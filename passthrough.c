@@ -96,6 +96,9 @@ void loop(void) {
 
 	if (nrf24_rx_fifo_data()) {
 		uint8_t pkt_len, pkt_buf[32], i;
+#ifdef SEQN
+		static uint8_t seqn = 0xff;
+#endif
 
 #ifdef FLASH_TOOL_MODE
 		flasher_rx_handle();
@@ -103,6 +106,13 @@ void loop(void) {
 
 		nrf24_rx_read(pkt_buf, &pkt_len);
 
+#ifdef SEQN
+		if (pkt_buf[0] != seqn) {
+			seqn = pkt_buf[0];
+			for (i = 1; i < pkt_len; i ++)
+				serial_write1(pkt_buf[i]);
+		}
+#else
 		for (i = 0; i < pkt_len; i ++)
 			serial_write1(pkt_buf[i]);
 #endif
@@ -111,7 +121,17 @@ void loop(void) {
 	}
 
 	if (tx_fifo.len) { /* .len access should be atomic */
-		uint8_t pkt_len, pkt_buf[32], split;
+		uint8_t pkt_len, pkt_buf[MAX_PKT_SIZE], split;
+#ifdef SEQN
+		static uint8_t seqn = 0x00;
+		uint8_t count = 128;
+#define		MAX_PLD_SIZE	(MAX_PKT_SIZE - 1)
+
+		pkt_buf[0] = seqn ++;
+#else
+		uint8_t count = 2;
+#define		MAX_PLD_SIZE	MAX_PKT_SIZE
+#endif
 
 #ifdef FLASH_TOOL_MODE
 		flasher_tx_handle();
@@ -132,9 +152,10 @@ void loop(void) {
 		split = min(pkt_len,
 				(uint16_t) (~tx_fifo.start & FIFO_MASK) + 1);
 
-		memcpy(pkt_buf, tx_fifo.data +
+#define START (MAX_PKT_SIZE - MAX_PLD_SIZE)
+		memcpy(pkt_buf + START, tx_fifo.data +
 				(tx_fifo.start & FIFO_MASK), split);
-		memcpy(pkt_buf + split, tx_fifo.data, pkt_len - split);
+		memcpy(pkt_buf + START + split, tx_fifo.data, pkt_len - split);
 		/*
 		 * Or we could just do pkt_buf = tx_fifo.data + ...;
 		 * pkt_len = split;
@@ -145,8 +166,14 @@ void loop(void) {
 		tx_fifo.start += pkt_len;
 		sei();
 
-		nrf24_tx(pkt_buf, pkt_len);
-		nrf24_tx_result_wait();
+		while (-- count) {
+			/* Don't flood the remote end with the comms */
+			my_delay(4);
+
+			nrf24_tx(pkt_buf, pkt_len + START);
+			if (!nrf24_tx_result_wait())
+				break;
+		}
 	}
 }
 
