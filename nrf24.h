@@ -12,6 +12,23 @@ static inline void nrf24_csn(uint8_t level) {
 		CSN_PORT &= ~CSN_PIN;
 }
 
+static void delay8(uint16_t count) {
+	while (count --)
+		__asm__ __volatile__ (
+			"\tnop\n"
+			"\tnop\n"
+			"\tnop\n"
+			"\tnop\n"
+			"\tnop\n"
+			"\tnop\n"
+			"\tnop\n"
+			"\twdr\n"
+		);
+}
+#ifndef TIMER
+#define my_delay(msec) delay8((int) (F_CPU / 8000L * (msec)))
+#endif
+
 static inline void nrf24_ce(uint8_t level) {
 	/*
 	 * Make sure the minimum time period has passed since the previous
@@ -37,19 +54,10 @@ static inline void nrf24_ce(uint8_t level) {
 		while (timer_read() - prev_ce_edge <= F_CPU / 5000);
 #else
 	/* This should take at least 10us (rising) or 200us (falling) */
-	uint16_t cnt = F_CPU / (level ? 100000 : 5000) / 8;
-
-	while (cnt --)
-		__asm__ __volatile__ (
-			"\tnop\n"
-			"\tnop\n"
-			"\tnop\n"
-			"\tnop\n"
-			"\tnop\n"
-			"\tnop\n"
-			"\tnop\n"
-			"\twdr\n"
-		);
+	if (level)
+		my_delay(0.01);
+	else
+		my_delay(0.2);
 #endif
 
 	if (level)
@@ -120,24 +128,7 @@ static uint8_t nrf24_tx_flush(void) {
 }
 
 static void nrf24_delay(void) {
-#ifdef TIMER
 	my_delay(5);
-#else
-	/* This should take at least 4ms */
-	uint16_t cnt = F_CPU / 250 / 8;
-
-	while (cnt --)
-		__asm__ __volatile__ (
-			"\tnop\n"
-			"\tnop\n"
-			"\tnop\n"
-			"\tnop\n"
-			"\tnop\n"
-			"\tnop\n"
-			"\tnop\n"
-			"\twdr\n"
-		);
-#endif
 }
 
 /* Enable 16-bit CRC */
@@ -153,13 +144,14 @@ static int nrf24_init(void) {
 	nrf24_csn(1);
 	nrf24_delay();
 
-	/* 1500uS timeouts */
-	nrf24_write_reg(SETUP_RETR, 0x4f);
-	if (nrf24_read_reg(SETUP_RETR) != 0x4f)
+	/* 2ms interval, 15 retries (16 total) */
+	nrf24_write_reg(SETUP_RETR, 0x7f);
+	if (nrf24_read_reg(SETUP_RETR) != 0x7f)
 		return 1; /* There may be no nRF24 connected */
 
-	/* Maximum Tx power, 1Mbps data rate */
-	nrf24_write_reg(RF_SETUP, (1 << RF_PWR_LOW) | (1 << RF_PWR_HIGH));
+	/* Maximum Tx power, 250kbps data rate */
+	nrf24_write_reg(RF_SETUP, (1 << RF_PWR_LOW) | (1 << RF_PWR_HIGH) |
+			(1 << RF_DR_LOW));
 	/* Dynamic payload length for TX & RX (pipes 0 and 1) */
 	nrf24_write_reg(DYNPD, 0x03);
 	nrf24_write_reg(FEATURE, 1 << EN_DPL);
@@ -308,6 +300,7 @@ static void nrf24_tx(uint8_t *buf, uint8_t len) {
 
 static int nrf24_tx_result_wait(void) {
 	uint8_t status;
+	uint16_t count = 10000; /* ~100ms timeout */
 
 	status = nrf24_read_status();
 
@@ -315,8 +308,10 @@ static int nrf24_tx_result_wait(void) {
 	nrf24_ce(0);
 
 	while ((!(status & (1 << TX_DS)) || (status & (1 << TX_FULL))) &&
-			!(status & (1 << MAX_RT)))
+			!(status & (1 << MAX_RT)) && --count) {
+		delay8((int) (F_CPU / 8000L * 0.01));
 		status = nrf24_read_status();
+	}
 
 	/* Reset status bits */
 	nrf24_write_reg(STATUS, (1 << MAX_RT) | (1 << TX_DS));
@@ -327,5 +322,5 @@ static int nrf24_tx_result_wait(void) {
 		nrf24_rx_mode();
 	}
 
-	return (status & (1 << MAX_RT)) ? -1 : 0;
+	return (status & (1 << TX_DS)) ? 0 : -1;
 }

@@ -28,7 +28,8 @@ static void spi_init(void) {
 }
 
 static uint8_t spi_transfer(uint8_t value) {
+	uint8_t cnt = 0xff;
 	SPDR = value;
-	while (!(SPSR & (1 << SPIF)));
+	while (cnt -- && !(SPSR & (1 << SPIF)));
 	return SPDR;
 }
