@@ -1,5 +1,6 @@
 #define FLASH_TOOL_MODE
 #define MAX_PKT_SIZE 32
+#define SEQN
 
 static void flasher_setup(void);
 static void flasher_rx_handle(void);
