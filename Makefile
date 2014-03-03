@@ -1,11 +1,10 @@
 # Mostly boilerplate arduino/avr Makefile.
 #
 PORT = /dev/ttyUSB0
-TARGET = lights
-TARGET = passthrough
-TARGET = flasher
-SRC = $(TARGET).c uart.c timer1.c
-ASRC =
+TARGETS = lights passthrough flasher reset
+SRC_flasher = uart.c timer1.c
+SRC_passthrough = uart.c timer1.c
+SRC_lights = timer1.c
 MCU = atmega328p
 F_CPU = 16000000
 FORMAT = ihex
@@ -45,7 +44,6 @@ LDFLAGS =
 # Programming support using avrdude. Settings and variables.
 AVRDUDE_PROGRAMMER = arduino
 AVRDUDE_PORT = $(PORT)
-AVRDUDE_WRITE_FLASH = -U flash:w:$(TARGET).hex
 AVRDUDE_FLAGS = -F -p $(MCU) -P $(AVRDUDE_PORT) -c $(AVRDUDE_PROGRAMMER) \
   -b $(UPLOAD_RATE)
 
@@ -60,10 +58,11 @@ REMOVE = rm -f
 MV = mv -f
 
 # Define all object files.
-OBJ = $(SRC:.c=.o) $(ASRC:.S=.o)
+$(foreach t, $(TARGETS), $(eval OBJ_$(t) = $(t).o $$(SRC_$(t):.c=.o) $$(ASRC_$(t):.S=.o)))
 
 # Define all listing files.
-LST = $(ASRC:.S=.lst) $(SRC:.c=.lst)
+#LST = $(ASRC:.S=.lst) $(SRC:.c=.lst)
+$(foreach t, $(TARGETS), $(eval LST_$(t) = $$(ASRC_$(t):.S=.lst) $(t).lst $$(SRC_$(t):.c=.lst)))
 
 # Combine all necessary flags and optional flags.
 # Add target processor to flags.
@@ -75,15 +74,12 @@ all: build
 
 build: elf hex
 
-elf: $(TARGET).elf
-hex: $(TARGET).hex
-eep: $(TARGET).eep
-lss: $(TARGET).lss
-sym: $(TARGET).sym
+elf hex eep lss sym: %: $(TARGETS:=.%)
 
 # Program the device.
-upload: $(TARGET).hex
-	$(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH)
+upload: flasher.hex
+upload_%: %.hex
+	$(AVRDUDE) $(AVRDUDE_FLAGS) -U flash:w:$<
 program-radio-addr0:
 	$(AVRDUDE) $(AVRDUDE_FLAGS) -U eeprom:w:0x73,0x6c,0x30,0x73,0x6c,0x31:m
 program-radio-addr1:
@@ -96,11 +92,15 @@ COFFCONVERT=$(OBJCOPY) --debugging \
 --change-section-address .noinit-0x800000 \
 --change-section-address .eeprom-0x810000
 
-coff: $(TARGET).elf
-	$(COFFCONVERT) -O coff-avr $(TARGET).elf $(TARGET).cof
+coff: $(TARGETS:=.elf)
+	for t in target; do
+		$(COFFCONVERT) -O coff-avr $$t.elf $$t.cof
+	done
 
-extcoff: $(TARGET).elf
-	$(COFFCONVERT) -O coff-ext-avr $(TARGET).elf $(TARGET).cof
+extcoff: $(TARGETS:=.elf)
+	for t in target; do
+		$(COFFCONVERT) -O coff-ext-avr $$t.elf $$t.cof
+	done
 
 .SUFFIXES: .elf .hex .eep .lss .sym
 
@@ -120,8 +120,9 @@ extcoff: $(TARGET).elf
 	$(NM) -n $< > $@
 
 # Link: create ELF output file from object files.
-$(TARGET).elf: $(OBJ)
-	$(CC) $(ALL_CFLAGS) $(OBJ) --output $@ $(LDFLAGS)
+.SECONDEXPANSION:
+%.elf: $$(OBJ_%)
+	$(CC) $(ALL_CFLAGS) $^ --output $@ $(LDFLAGS)
 
 # Compile: create object files from C source files.
 .c.o:
@@ -137,8 +138,7 @@ $(TARGET).elf: $(OBJ)
 
 # Target: clean project.
 clean:
-	$(REMOVE) $(TARGET).hex $(TARGET).eep $(TARGET).cof $(TARGET).elf \
-	$(TARGET).map $(TARGET).sym $(TARGET).lss \
+	$(REMOVE) {$(TARGETS)}{.hex,.eep,.cof,.elf,.map,.sym,/lss} \
 	$(OBJ) $(LST) $(SRC:.c=.s) $(SRC:.c=.d)
 
 depend:
