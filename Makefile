@@ -78,12 +78,15 @@ elf hex eep lss sym: %: $(TARGETS:=.%)
 
 # Program the device.
 upload: flasher.hex
+	$(AVRDUDE) $(AVRDUDE_FLAGS) -U flash:w:$<
 upload_%: %.hex
 	$(AVRDUDE) $(AVRDUDE_FLAGS) -U flash:w:$<
 program-radio-addr0:
 	$(AVRDUDE) $(AVRDUDE_FLAGS) -U eeprom:w:0x73,0x6c,0x30,0x73,0x6c,0x31:m
 program-radio-addr1:
 	$(AVRDUDE) $(AVRDUDE_FLAGS) -U eeprom:w:0x73,0x6c,0x31,0x73,0x6c,0x30:m
+read-radio-addr:
+	$(AVRDUDE) $(AVRDUDE_FLAGS) -U eeprom:r:-:h
 
 # Convert ELF to COFF for use in debugging / simulating in AVR Studio or VMLAB.
 COFFCONVERT=$(OBJCOPY) --debugging \
@@ -138,8 +141,10 @@ extcoff: $(TARGETS:=.elf)
 
 # Target: clean project.
 clean:
-	$(REMOVE) {$(TARGETS)}{.hex,.eep,.cof,.elf,.map,.sym,/lss} \
-	$(OBJ) $(LST) $(SRC:.c=.s) $(SRC:.c=.d)
+	for target in $(TARGETS); do \
+		bash -c "$(REMOVE) $$target{.hex,.eep,.cof,.elf,.map,.sym,/lss,.o}"; \
+	done
+	$(REMOVE) $(OBJ) $(LST) $(SRC:.c=.s) $(SRC:.c=.d)
 
 depend:
 	if grep '^# DO NOT DELETE' $(MAKEFILE) >/dev/null; \
