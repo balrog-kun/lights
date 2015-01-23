@@ -7,6 +7,7 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <string.h>
+#include <avr/wdt.h>
 
 #include "timer1.h"
 #include "uart.h"
@@ -54,6 +55,7 @@ void setup(void) {
 	uint8_t m = MCUCR;
 	uint8_t i, addrs[6];
 
+	wdt_disable();
 	serial_init();
 	timer_init();
 	spi_init();
